@@ -64,39 +64,49 @@ namespace Promit.Test.OneItem
                 throw new InvalidPullPostOperation($"Невозможно получить объект с пула, так как он остановлен");
             }
 
-            T objToReturn;
+            
 
             CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
             CancellationToken token = cancelTokenSource.Token;
 
-            while (!_items.Any())
+            Task<T> task = new Task<T>(() =>
             {
-                T returnedItem;
+                T objToReturn;
 
-                if (!token.IsCancellationRequested)
+                while (!_items.Any())
                 {
-                    lock (_lock)
-                    {
-                        returnedItem = _items[_items.Count - 1];
-                        if (returnedItem != null)
-                        {
-                            _items.Remove(returnedItem.GetHashCode());
+                    T returnedItem;
 
+                    if (!token.IsCancellationRequested)
+                    {
+                        lock (_lock)
+                        {
+                            returnedItem = _items[_items.Count - 1];
+                            if (returnedItem != null)
+                            {
+                                _items.Remove(returnedItem.GetHashCode());
+
+                            }
                         }
+
+                        return returnedItem;
+
+                        // для того, чтобы таски непрерывно не долбились в коллекцию.
+                        // Опять же не уверен, что сделал всё правильно, так как очень мало возился с многопоточкой и асинхронкой.
+                        // И даже если вы меня не возьмете на работу - буду благодарен за совет "как надо"
+                        Task.Delay(30);
                     }
 
-                    return returnedItem;
 
-                    // для того, чтобы таски непрерывно не долбились в коллекцию.
-                    // Опять же не уверен, что сделал всё правильно, так как очень мало возился с многопоточкой и асинхронкой.
-                    // И даже если вы меня не возьмете на работу - буду благодарен за совет "как надо"
-                    Task.Delay(30);
                 }
+                return  default(T);
+            });
 
-                
-            }
+            _taskList.TryAdd(task, cancelTokenSource);
 
-            return default(T);
+
+            // и так тоже делать не стоит. Но другого варианта не увидел
+            return task.Result;
         }
 #pragma warning restore CS8603
 
